@@ -1,0 +1,480 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>走样与反走样：先过滤后采样</title>
+<style>
+:root{--ink:#19242d;--muted:#66747d;--paper:#f5f7f6;--panel:#fff;--line:#d9e2de;--blue:#146b8c;--red:#be4938;--green:#16805c;--orange:#c86a29;--dark:#223947}
+*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font-family:"Microsoft YaHei","PingFang SC",system-ui,sans-serif;line-height:1.55}main{max-width:1220px;margin:auto;padding:32px 22px 64px}header{border-bottom:1px solid var(--line);padding:12px 0 26px}.eyebrow,.kicker{font-size:13px;font-weight:700;letter-spacing:1.5px;color:var(--orange)}h1{font-size:clamp(30px,4.5vw,54px);line-height:1.12;margin:12px 0}h2{font-size:clamp(23px,3vw,34px);line-height:1.2;margin:0 0 10px}h3{font-size:18px;margin:0 0 8px}.lead{font-size:18px;color:var(--muted);max-width:930px}.answer{display:inline-block;margin-top:12px;padding:10px 14px;border-left:4px solid var(--green);background:#e6f4ef;color:var(--green);font-weight:700}section{padding:38px 0;border-bottom:1px solid var(--line)}.head{display:flex;justify-content:space-between;align-items:end;gap:20px;margin-bottom:18px}.small{font-size:13px;color:var(--muted)}.compare{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.card{background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:12px}.card.ref{border-top:4px solid var(--blue)}.card.bad{border-top:4px solid var(--red)}.card.good{border-top:4px solid var(--green)}.label{font-size:15px;font-weight:700;color:var(--dark);margin-bottom:8px}.tag{display:inline-block;padding:2px 7px;border-radius:3px;background:#edf3f4;color:var(--blue);font-size:12px;margin-right:5px}.tag.bad{color:var(--red)}.tag.good{color:var(--green)}canvas{display:block;width:100%;height:auto;border:1px solid var(--line);border-radius:4px;background:#fff}
+.canvas-wrap{position:relative}
+.canvas-wrap.mag-hide-cursor{cursor:none}
+.overlay{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;border:none;border-radius:4px;background:transparent}
+.mag-btn{padding:6px 16px;border:1px solid var(--green);border-radius:5px;background:#fff;color:var(--green);font-size:13px;font-weight:700;cursor:pointer;transition:all .15s}
+.mag-btn:hover{background:var(--green);color:#fff}
+.mag-btn.active{background:var(--green);color:#fff;box-shadow:0 0 8px rgba(22,128,92,.4)}
+.key-grid{display:flex;flex-wrap:wrap;gap:10px 8px;margin-top:8px}
+.key-item{display:flex;flex-direction:column;align-items:center;width:56px}
+.key-cap{width:40px;height:38px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#2c3e50;background:linear-gradient(180deg,#fafafa 0%,#e8e8e8 100%);border:1px solid #bbb;border-radius:6px;box-shadow:0 3px 0 #999,0 4px 6px rgba(0,0,0,.15);margin-bottom:5px;font-family:inherit}
+.key-label{font-size:10px;color:var(--muted);text-align:center;line-height:1.3}.caption{font-size:13px;color:var(--muted);min-height:44px;margin:8px 0 0}.controls{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;background:#fff;border:1px solid var(--line);padding:14px;margin-top:14px;border-radius:7px}.control{font-size:13px;color:var(--muted)}.control b{display:block;color:var(--ink);margin-bottom:5px}.control output{color:var(--green);font-weight:700}.control input{width:100%;accent-color:var(--green)}.note{padding:14px 16px;background:#fff7ed;border-left:4px solid var(--orange);margin-top:14px}.definition{display:grid;grid-template-columns:1fr 1fr;gap:14px}.definition .box{background:#fff;border:1px solid var(--line);border-radius:7px;padding:16px}.box strong{color:var(--blue)}.flow{display:grid;grid-template-columns:1fr 34px 1fr 34px 1fr;align-items:center;gap:8px}.flowbox{padding:14px;background:#fff;border:1px solid var(--line);border-radius:6px}.flowbox b{display:block;color:var(--dark)}.arrow{text-align:center;color:var(--muted);font-size:24px}.dark{background:var(--dark);color:#edf5f4;margin-left:calc((1220px - 100vw)/2);margin-right:calc((1220px - 100vw)/2);padding-left:max(22px,calc((100vw - 1220px)/2 + 22px));padding-right:max(22px,calc((100vw - 1220px)/2 + 22px));}.dark .small{color:#b8cbd0}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}.dark .card{background:#294b5b;border-color:#416575;color:#edf5f4}.pixel-legend{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin-top:8px}.swatch{display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:4px;vertical-align:-1px}.s1{background:#e8f2f0}.s2{background:#aecfc7}.s3{background:#37697c}.s4{background:#d9a15e}@media(max-width:760px){main{padding:22px 13px 45px}.compare,.definition,.grid2,.controls{grid-template-columns:1fr}.head{display:block}.head .small{margin-top:7px}.flow{display:block}.flowbox{margin:7px 0}.arrow{transform:rotate(90deg);height:18px}}
+</style>
+</head>
+<body>
+<main>
+<header>
+<div class="eyebrow">第三章 · 光栅图形学</div>
+<h1>走样与反走样</h1>
+<p class="lead">本页只回答一个问题：同一幅包含斜向方格和曲面的连续图像，为什么“先采样后过滤”仍然能看见锯齿，而“先过滤后采样”可以把边界变成平滑的灰度过渡？</p>
+<div class="answer">结论：在采样前模糊，也就是预过滤；先把一个像素区域内的连续信息平均起来，再决定这个像素的颜色。</div>
+</header>
+
+<section>
+<div class="head"><div><div class="kicker">01 · 概念回顾</div><h2>走样、反走样、采样与过滤</h2></div></div>
+<div class="definition">
+<div class="box"><h3><strong>走样（Aliasing）</strong></h3><p>光栅网格上的像素近似地描绘平滑的直线、多边形和曲线图元的边界。因为连续边界被迫适配离散网格，出现锯齿状、阶梯状边界，这种现象称为走样。</p></div>
+<div class="box"><h3><strong>反走样（Anti-Aliasing）</strong></h3><p>不再只用"完全在内/完全在外"两种颜色表示边界像素，而是引入中间颜色值，使像素边界处的视觉过渡更接近连续图形。</p></div>
+<div class="box"><h3><strong>采样</strong></h3><p>把连续图像变成有限个像素。A 和 B 都在像素中心读取颜色值，纹理和明暗保留，但几何边界会被量化到像素网格。</p></div>
+<div class="box"><h3><strong>过滤</strong></h3><p>本页提供盒式和十字加权两种滤波方式，A、B 使用完全相同的滤波器。过滤器相同，输入数据和处理顺序不同。</p></div>
+</div>
+</section>
+
+
+
+<section>
+<div class="head"><div><div class="kicker">02 · 先看三张图</div><h2>同一基准，两种顺序</h2></div><div class="small">基准图不是另一种算法，而是同一连续场景的高分辨率参考</div></div>
+<div class="compare">
+<div class="card ref"><div class="label"><span class="tag">基准</span>连续场景参考图</div><canvas id="reference" width="720" height="480"></canvas><p class="caption">用高分辨率绘制斜向棋盘和圆形曲面（720×480），只用来代表原始连续图像。</p></div>
+<div class="card bad"><div class="label"><span class="tag bad">A</span>先采样后过滤</div><div class="canvas-wrap"><canvas id="post" width="520" height="340"></canvas><canvas id="postOverlay" class="overlay" width="520" height="340"></canvas></div><p class="caption">先在目标像素中心取样，再使用与 B 相同的盒式过滤器；纹理和明暗保留，但边界已被量化成阶梯。</p></div>
+<div class="card good"><div class="label"><span class="tag good">B</span>先过滤后采样</div><div class="canvas-wrap"><canvas id="pre" width="520" height="340"></canvas><canvas id="preOverlay" class="overlay" width="520" height="340"></canvas></div><p class="caption">先在连续场景上使用同一个盒式过滤器，再在目标像素中心取样；边界灰度来自连续区域的加权平均。</p></div>
+</div>
+<div class="controls">
+<div class="control"><b>目标分辨率 <output id="resOut">96 × 64</output></b><input id="res" type="range" min="60" max="300" value="96"><button class="mag-btn" id="magBtn" style="margin-top:8px">🔍 开启放大镜（M）</button></div>
+<div class="control"><b>滤波方式（A、B 共用）</b><div style="margin-top:6px"><label style="margin-right:16px"><input type="radio" name="filterType" id="ftBox" value="box" checked> 盒式</label><label><input type="radio" name="filterType" id="ftCross" value="cross"> 十字加权</label></div><div id="boxOpts" style="margin-top:6px"><label style="margin-right:10px"><input type="radio" name="boxSize" id="boxSize3" value="3" checked> 3×3</label><label><input type="radio" name="boxSize" id="boxSize5" value="5"> 5×5</label></div><div id="crossInfo" style="margin-top:6px;font-size:12px;color:var(--muted);display:none">新值 = 0.5·自身 + 0.5·(上下左右均值)　按 X 切换开/关</div></div>
+<div class="control"><b>快捷键</b>
+<div class="key-grid">
+<div class="key-item"><div class="key-cap">B</div><div class="key-label">盒式</div></div>
+<div class="key-item"><div class="key-cap">C</div><div class="key-label">十字加权</div></div>
+<div class="key-item"><div class="key-cap">3</div><div class="key-label">盒 3×3</div></div>
+<div class="key-item"><div class="key-cap">5</div><div class="key-label">盒 5×5</div></div>
+<div class="key-item"><div class="key-cap">0</div><div class="key-label">无滤波</div></div>
+<div class="key-item"><div class="key-cap">X</div><div class="key-label">十字开/关</div></div>
+<div class="key-item"><div class="key-cap">M</div><div class="key-label">放大镜</div></div><div class="key-item"><div class="key-cap">←</div><div class="key-label">分辨率 -</div></div><div class="key-item"><div class="key-cap">→</div><div class="key-label">分辨率 +</div></div>
+</div></div>
+
+</div>
+<div class="note"><b>这里的基准已经定死：</b>三张图都来自同一个连续场景；A、B 使用同一种滤波方式（盒式或十字加权，可切换），只交换顺序。A 先在目标像素中心采样得到离散网格，再对离散像素做滤波；B 先在 720×480 高分辨率参考图上做滤波，再降采样到目标分辨率。</div>
+</section>
+
+
+<section>
+<div class="head"><div><div class="kicker">03 · 补充说明</div><h2>两种滤波方式的原理与演示</h2></div></div>
+
+<!-- 3a 两种滤波方式原理 -->
+<h3>3a · 两种滤波方式原理</h3>
+<div class="definition">
+<div class="box">
+<h3><strong>3×3 盒核</strong></h3>
+<div style="display:grid;grid-template-columns:repeat(3,28px);gap:2px;margin:8px auto;width:fit-content">
+<span style="background:#aecfc7;text-align:center;padding:6px 0;border-radius:3px;font-size:13px">1</span>
+<span style="background:#aecfc7;text-align:center;padding:6px 0;border-radius:3px;font-size:13px">1</span>
+<span style="background:#aecfc7;text-align:center;padding:6px 0;border-radius:3px;font-size:13px">1</span>
+<span style="background:#aecfc7;text-align:center;padding:6px 0;border-radius:3px;font-size:13px">1</span>
+<span style="background:#37697c;color:#fff;text-align:center;padding:6px 0;border-radius:3px;font-size:13px;font-weight:700">1</span>
+<span style="background:#aecfc7;text-align:center;padding:6px 0;border-radius:3px;font-size:13px">1</span>
+<span style="background:#aecfc7;text-align:center;padding:6px 0;border-radius:3px;font-size:13px">1</span>
+<span style="background:#aecfc7;text-align:center;padding:6px 0;border-radius:3px;font-size:13px">1</span>
+<span style="background:#aecfc7;text-align:center;padding:6px 0;border-radius:3px;font-size:13px">1</span>
+</div>
+<p style="font-size:13px;color:var(--muted);text-align:center">9 个邻居均匀 → 每个像素值 = 1/9 · Σ</p>
+</div>
+<div class="box">
+<h3><strong>5×5 盒核</strong></h3>
+<div style="display:grid;grid-template-columns:repeat(5,22px);gap:2px;margin:8px auto;width:fit-content">
+<span style="background:#aecfc7;text-align:center;padding:5px 0;border-radius:3px;font-size:11px">1</span><span style="background:#aecfc7;text-align:center;padding:5px 0;border-radius:3px;font-size:11px">1</span><span style="background:#aecfc7;text-align:center;padding:5px 0;border-radius:3px;font-size:11px">1</span><span style="background:#aecfc7;text-align:center;padding:5px 0;border-radius:3px;font-size:11px">1</span><span style="background:#aecfc7;text-align:center;padding:5px 0;border-radius:3px;font-size:11px">1</span>
+<span style="background:#aecfc7;text-align:center;padding:5px 0;border-radius:3px;font-size:11px">1</span><span style="background:#aecfc7;text-align:center;padding:5px 0;border-radius:3px;font-size:11px">1</span><span style="background:#aecfc7;text-align:center;padding:5px 0;border-radius:3px;font-size:11px">1</span><span style="background:#aecfc7;text-align:center;padding:5px 0;border-radius:3px;font-size:11px">1</span><span style="background:#aecfc7;text-align:center;padding:5px 0;border-radius:3px;font-size:11px">1</span>
+<span style="background:#aecfc7;text-align:center;padding:5px 0;border-radius:3px;font-size:11px">1</span><span style="background:#aecfc7;text-align:center;padding:5px 0;border-radius:3px;font-size:11px">1</span><span style="background:#37697c;color:#fff;text-align:center;padding:5px 0;border-radius:3px;font-size:11px;font-weight:700">1</span><span style="background:#aecfc7;text-align:center;padding:5px 0;border-radius:3px;font-size:11px">1</span><span style="background:#aecfc7;text-align:center;padding:5px 0;border-radius:3px;font-size:11px">1</span>
+<span style="background:#aecfc7;text-align:center;padding:5px 0;border-radius:3px;font-size:11px">1</span><span style="background:#aecfc7;text-align:center;padding:5px 0;border-radius:3px;font-size:11px">1</span><span style="background:#aecfc7;text-align:center;padding:5px 0;border-radius:3px;font-size:11px">1</span><span style="background:#aecfc7;text-align:center;padding:5px 0;border-radius:3px;font-size:11px">1</span><span style="background:#aecfc7;text-align:center;padding:5px 0;border-radius:3px;font-size:11px">1</span>
+<span style="background:#aecfc7;text-align:center;padding:5px 0;border-radius:3px;font-size:11px">1</span><span style="background:#aecfc7;text-align:center;padding:5px 0;border-radius:3px;font-size:11px">1</span><span style="background:#aecfc7;text-align:center;padding:5px 0;border-radius:3px;font-size:11px">1</span><span style="background:#aecfc7;text-align:center;padding:5px 0;border-radius:3px;font-size:11px">1</span><span style="background:#aecfc7;text-align:center;padding:5px 0;border-radius:3px;font-size:11px">1</span>
+</div>
+<p style="font-size:13px;color:var(--muted);text-align:center">25 个邻居均匀 → 每个像素值 = 1/25 · Σ</p>
+</div>
+</div>
+<div class="definition" style="margin-top:14px">
+<div class="box">
+<h3><strong>十字加权核</strong></h3>
+<div style="display:grid;grid-template-columns:repeat(3,28px);gap:2px;margin:8px auto;width:fit-content">
+<span style="background:#f0f0f0;text-align:center;padding:6px 0;border-radius:3px;font-size:12px;color:#999">0</span>
+<span style="background:#aecfc7;text-align:center;padding:6px 0;border-radius:3px;font-size:12px">0.125</span>
+<span style="background:#f0f0f0;text-align:center;padding:6px 0;border-radius:3px;font-size:12px;color:#999">0</span>
+<span style="background:#aecfc7;text-align:center;padding:6px 0;border-radius:3px;font-size:12px">0.125</span>
+<span style="background:#37697c;color:#fff;text-align:center;padding:6px 0;border-radius:3px;font-size:12px;font-weight:700">0.5</span>
+<span style="background:#aecfc7;text-align:center;padding:6px 0;border-radius:3px;font-size:12px">0.125</span>
+<span style="background:#f0f0f0;text-align:center;padding:6px 0;border-radius:3px;font-size:12px;color:#999">0</span>
+<span style="background:#aecfc7;text-align:center;padding:6px 0;border-radius:3px;font-size:12px">0.125</span>
+<span style="background:#f0f0f0;text-align:center;padding:6px 0;border-radius:3px;font-size:12px;color:#999">0</span>
+</div>
+<p style="font-size:13px;color:var(--muted);text-align:center">新值 = 0.5·自身 + 0.5·(上下左右均均)，不含对角</p>
+</div>
+<div class="box">
+<h3><strong>区别</strong></h3>
+<p>盒式：8 邻居均匀，各方向均匀平滑。<br><br>十字：只上下左右 4 邻居 + 中心加权，<b>对角方向细节保留更多</b>。<br><br>两者都是低通滤波，只是邻域形状和权重分布不同。</p>
+</div>
+</div>
+
+<div style="display:flex;gap:12px;align-items:flex-start;margin-top:14px;flex-wrap:wrap">
+<div style="flex:1;min-width:180px">
+<h3 style="font-size:14px;margin:0 0 8px">盒式核覆盖示意</h3>
+<canvas id="kernelDemo" width="220" height="220" style="width:100%;height:auto;border:1px solid var(--line);border-radius:6px;background:#fff"></canvas>
+<div style="margin-top:6px;font-size:11px;color:var(--muted)">深色=中心，蓝=核覆盖。碰 1~2 环</div>
+<div style="margin-top:6px"><label style="margin-right:10px"><input type="radio" name="kernelPick" id="k3" value="3" checked> 3×3</label><label><input type="radio" name="kernelPick" id="k5" value="5"> 5×5</label></div>
+</div>
+<div style="flex:1;min-width:180px">
+<h3 style="font-size:14px;margin:0 0 8px">十字核覆盖示意</h3>
+<canvas id="kernelDemoCross" width="220" height="220" style="width:100%;height:auto;border:1px solid var(--line);border-radius:6px;background:#fff"></canvas>
+<div style="margin-top:6px;font-size:11px;color:var(--muted)">深色=中心，绿=上下左右。不含对角</div>
+<div style="margin-top:6px"><label><input type="checkbox" id="crossOn" checked> 显示</label></div>
+</div>
+<div style="flex:1;min-width:150px">
+<h3 style="font-size:14px;margin:0 0 8px">参考图（16×16 斜线阶梯）</h3>
+<canvas id="demoSrc" width="200" height="200" style="width:100%;height:auto;border:1px solid var(--line);border-radius:6px;background:#fff;image-rendering:pixelated"></canvas>
+</div>
+<div style="flex:1;min-width:150px">
+<h3 style="font-size:14px;margin:0 0 8px">盒式滤波后</h3>
+<canvas id="demoDst" width="200" height="200" style="width:100%;height:auto;border:1px solid var(--line);border-radius:6px;background:#fff;image-rendering:pixelated"></canvas>
+</div>
+<div style="flex:1;min-width:150px">
+<h3 style="font-size:14px;margin:0 0 8px">十字滤波后</h3>
+<canvas id="demoDstCross" width="200" height="200" style="width:100%;height:auto;border:1px solid var(--line);border-radius:6px;background:#fff;image-rendering:pixelated"></canvas>
+</div>
+</div>
+<p style="font-size:12px;color:var(--muted);margin-top:8px">左两块：核覆盖范围示意（盒式 3×3/5×5 可切，十字可开关）。右三块：同一张参考图，分别经盒式和十字滤波后的结果。</p></section>
+
+<!-- 3b -->
+<section>
+<div class="head"><div><div class="kicker">03 \u00b7 补充说明 \u00b7 续</div><h2>为什么十字加权不如盒式擅长体现 A/B 差异？</h2></div></div>
+<div class="definition">
+<div class="box">
+<h3><strong>盒式核</strong></h3>
+<p>均匀权重、含对角，是较强的低通滤波器。<br><br>B 预过滤时能充分抑制对角高频 → 采样后混叠少。<br>A 后过滤时作用在已离散的数据上，无法纠正混叠。<br><br>两种顺序的差异被放大，<strong>A/B 对比鲜明</strong>。</p>
+</div>
+<div class="box">
+<h3><strong>十字加权核</strong></h3>
+<p>只含上下左右、不含对角，低通能力较弱。<br><br>场景中的走样主要来自<strong>斜向边缘的对角高频</strong>。<br>十字核对对角方向衰减不足 → B 预过滤后仍有残余混叠。<br><br>A/B 两者效果都偏差，差异被压缩，<strong>对比不够鲜明</strong>。</p>
+</div>
+</div>
+<p style="margin-top:12px;font-size:15px">直观结论：<b>滤波器低通能力越强，"先过滤"的价值越大</b>，A/B 对比越清晰。盒式核（尤其 5×5）的均匀权重和对角覆盖，使它在演示中比十字加权更能体现"顺序"的影响。</p>
+</section>
+
+<!-- 3c -->
+
+
+<section>
+<div class="head"><div><div class="kicker">04 · 两条处理流程</div><h2>为什么两种“过滤”不是一回事？</h2></div></div>
+<div class="flow">
+<div class="flowbox"><b>连续场景</b>斜向方格 + 圆形曲面</div><div class="arrow">→</div><div class="flowbox"><b>采样</b>每个像素中心读取原始颜色，离散到目标分辨率网格</div><div class="arrow">→</div><div class="flowbox"><b>后过滤</b>对目标分辨率网格做滤波，阶梯已经形成，同一个核覆盖画面范围大、糊得厉害</div>
+</div>
+<div class="flow" style="margin-top:14px">
+<div class="flowbox"><b>连续场景</b>斜向方格 + 圆形曲面</div><div class="arrow">→</div><div class="flowbox"><b>预过滤</b>在 720×480 高分辨率参考图上做滤波，同一个核只覆盖很小的画面范围、糊得很少</div><div class="arrow">→</div><div class="flowbox"><b>采样结果</b>降采样到目标分辨率，边缘灰度来自高分辨率的加权平均</div>
+</div>
+<div class="note"><b>为什么效果不同：</b>同一个滤波核，A 作用在降采样后的粗网格上，一盖盖住大片画面，糊得多且阶梯已定型；B 先在高分辨率上滤波，核只影响很小范围，再降采样到目标分辨率。B 的边缘灰度是从高分辨率精确计算后带下来的，位置正确、过渡自然；A 的灰度是事后在错误的阶梯上糊出来的，位置已经错了。</div>
+</section>
+
+
+<footer class="small">本页围绕"走样、引入中间颜色值、采样前模糊、先采样后过滤与先过滤后采样"展开。采样定理、频谱和其他扩展内容暂不加入。</footer>“走样、引入中间颜色值、采样前模糊、先采样后过滤与先过滤后采样”展开。采样定理、频谱和其他扩展内容暂不加入。</footer>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+function ctxOf(el){const dpr=window.devicePixelRatio||1;const w=Number(el.dataset.logicalWidth||el.getAttribute('width'));const h=Number(el.dataset.logicalHeight||el.getAttribute('height'));el.dataset.logicalWidth=w;el.dataset.logicalHeight=h;el.style.aspectRatio=w+'/'+h;const pixelW=Math.round(w*dpr),pixelH=Math.round(h*dpr);if(el.width!==pixelW||el.height!==pixelH){el.width=pixelW;el.height=pixelH}const c=el.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);return {c,w,h}}
+function sceneSample(x,y){const ground=y>.43;const sphereX=(x-.34)/.19,sphereY=(y-.405)/.245,sphereR=sphereX*sphereX+sphereY*sphereY; if(sphereR<1){const z=Math.sqrt(1-sphereR),longitude=Math.atan2(sphereX,z);const bands=Math.sin(longitude*19+sphereY*2.5);const shade=.49+.20*z+.18*bands;return Math.max(.12,Math.min(.9,shade))}if(ground){const u=(x-.5)*8+(y-.43)*3.2,v=(y-.43)*9.2-(x-.5)*.9;const parity=(Math.floor(u)+Math.floor(v))&1;return parity===0?.76:.2}return .94}
+function boxFilter(data,width,height,kSize){const r=(kSize-1)/2,out=Array.from({length:height},()=>Array(width).fill(0));for(let y=0;y<height;y++)for(let x=0;x<width;x++){let sum=0,count=0;for(let dy=-r;dy<=r;dy++)for(let dx=-r;dx<=r;dx++){const yy=Math.max(0,Math.min(height-1,y+dy)),xx=Math.max(0,Math.min(width-1,x+dx));sum+=data[yy][xx];count++}out[y][x]=sum/count}return out}
+function crossFilter(data,width,height){const out=Array.from({length:height},()=>Array(width).fill(0));for(let y=0;y<height;y++)for(let x=0;x<width;x++){const yy1=Math.max(0,y-1),yy2=Math.min(height-1,y+1),xx1=Math.max(0,x-1),xx2=Math.min(width-1,x+1);const avg=(data[yy1][x]+data[yy2][x]+data[y][xx1]+data[y][xx2])/4;out[y][x]=0.5*data[y][x]+0.5*avg}return out}
+let crossEnabled=true,noFilter=false;
+let magLastX=null,magLastY=null;
+function applyFilter(data,w,h,kSize,filterType){
+  if(noFilter)return data.map(function(row){return row.slice()});
+  if(filterType==='cross'&&!crossEnabled)return data.map(function(row){return row.slice()});
+  return filterType==='cross'?crossFilter(data,w,h):boxFilter(data,w,h,kSize);
+}
+function sampleRaster(mode,resX,resY,ss,kSize,filterType){
+  const data=Array.from({length:resY},()=>Array(resX).fill(0));
+  if(mode==='post'){
+    for(let y=0;y<resY;y++)for(let x=0;x<resX;x++)data[y][x]=sceneSample((x+.5)/resX,(y+.5)/resY);
+    return applyFilter(data,resX,resY,kSize,filterType);
+  }
+  const HW=720,HH=480;
+  const hr=Array.from({length:HH},()=>Array(HW).fill(0));
+  for(let y=0;y<HH;y++)for(let x=0;x<HW;x++)hr[y][x]=sceneSample((x+.5)/HW,(y+.5)/HH);
+  const filtered=applyFilter(hr,HW,HH,kSize,filterType);
+  for(let y=0;y<resY;y++)for(let x=0;x<resX;x++){
+    const sx=Math.min(HW-1,Math.floor((x+.5)*HW/resX));
+    const sy=Math.min(HH-1,Math.floor((y+.5)*HH/resY));
+    data[y][x]=filtered[sy][sx];
+  }
+  return data;
+}
+function drawScene(id,w,h,mode,resX,resY,ss,kSize,filterType){const {c}=ctxOf($(id));c.clearRect(0,0,w,h);if(mode==='reference'){const source=document.createElement('canvas');source.width=w;source.height=h;const sourceContext=source.getContext('2d');const pixels=sourceContext.createImageData(w,h);for(let y=0;y<h;y++)for(let x=0;x<w;x++){const v=sceneSample(x/w,y/h),i=(y*w+x)*4;pixels.data[i]=Math.round(22+220*v);pixels.data[i+1]=Math.round(35+205*v);pixels.data[i+2]=Math.round(43+190*v);pixels.data[i+3]=255}sourceContext.putImageData(pixels,0,0);c.drawImage(source,0,0,w,h);return}const data=sampleRaster(mode,resX,resY,ss,kSize,filterType);for(let y=0;y<resY;y++)for(let x=0;x<resX;x++){const v=data[y][x];c.fillStyle=`rgb(${Math.round(22+220*v)},${Math.round(35+205*v)},${Math.round(43+190*v)})`;c.fillRect(x*w/resX,y*h/resY,w/resX+.5,h/resY+.5)}}
+
+function render(){const rx=+$('res').value,ry=Math.round(rx*2/3),kSize=+document.querySelector('[name=boxSize]:checked').value,filterType=document.getElementById('ftCross').checked?'cross':'box',ss=12;const postData=sampleRaster('post',rx,ry,ss,kSize,filterType),preData=sampleRaster('pre',rx,ry,ss,kSize,filterType);drawScene('reference',720,480,'reference',rx,ry,ss,kSize,filterType);drawScene('post',520,340,'post',rx,ry,ss,kSize,filterType);drawScene('pre',520,340,'pre',rx,ry,ss,kSize,filterType);$('resOut').textContent=rx+' × '+ry;try{magRefresh()}catch(e){}}
+$('res').addEventListener('input',render);document.querySelectorAll('[name=boxSize]').forEach(el=>el.addEventListener('change',function(){noFilter=false;render()}));
+document.querySelectorAll('[name=filterType]').forEach(el=>el.addEventListener('change',function(){noFilter=false;document.getElementById('boxOpts').style.display=document.getElementById('ftBox').checked?'':'none';document.getElementById('crossInfo').style.display=document.getElementById('ftCross').checked?'':'none';render()}));window.addEventListener('resize',render);render();
+
+// ===== 放大镜 =====
+const MAG_RADIUS=110;
+let magEnabled=false;
+function magZoom(rx){return 3}
+function drawMagnifier(overlayId,baseId,x,y,rx,ry,zoom,color){
+  const ov=$(overlayId),base=$(baseId);
+  const dpr=window.devicePixelRatio||1;
+  const w=Number(ov.dataset.logicalWidth||ov.getAttribute('width'));
+  const h=Number(ov.dataset.logicalHeight||ov.getAttribute('height'));
+  if(ov.width!==Math.round(w*dpr)||ov.height!==Math.round(h*dpr)){ov.width=Math.round(w*dpr);ov.height=Math.round(h*dpr);ov.dataset.logicalWidth=w;ov.dataset.logicalHeight=h}
+  const c=ov.getContext('2d');
+  c.setTransform(dpr,0,0,dpr,0,0);
+  c.clearRect(0,0,w,h);
+  if(!magEnabled)return;
+  const r=MAG_RADIUS;
+  const srcR=r/zoom;
+  const sx=(x-srcR)*dpr, sy=(y-srcR)*dpr, sSize=srcR*2*dpr;
+  c.save();
+  c.beginPath();c.arc(x,y,r,0,Math.PI*2);c.clip();
+  c.fillStyle='#102936';c.fillRect(x-r,y-r,r*2,r*2);
+  c.imageSmoothingEnabled=false;
+  c.drawImage(base,sx,sy,sSize,sSize,x-r,y-r,r*2,r*2);
+  const cellW=w/rx*zoom,cellH=h/ry*zoom;
+  if(cellW>4&&cellH>4){
+    c.strokeStyle='rgba(255,255,255,0.25)';c.lineWidth=0.5;
+    const x0=Math.floor(sx/(w/rx))*(w/rx),y0=Math.floor(sy/(h/ry))*(h/ry);
+    for(let px=x0;px<x+srcR;px+=w/rx){
+      const dx=x+(px-sx)*zoom-r;
+      if(dx>x-r&&dx<x+r){c.beginPath();c.moveTo(dx,y-r);c.lineTo(dx,y+r);c.stroke()}
+    }
+    for(let py=y0;py<y+srcR;py+=h/ry){
+      const dy=y+(py-sy)*zoom-r;
+      if(dy>y-r&&dy<y+r){c.beginPath();c.moveTo(x-r,dy);c.lineTo(x+r,dy);c.stroke()}
+    }
+  }
+  c.restore();
+  c.beginPath();c.arc(x,y,r,0,Math.PI*2);
+  c.strokeStyle=color;c.lineWidth=3;c.stroke();
+}
+function magUpdate(e,srcId){
+  const wrap=e.currentTarget;
+  const canvas=wrap.querySelector('canvas:not(.overlay)');
+  const rect=canvas.getBoundingClientRect();
+  const w=Number(canvas.dataset.logicalWidth||canvas.getAttribute('width'));
+  const h=Number(canvas.dataset.logicalHeight||canvas.getAttribute('height'));
+  const x=(e.clientX-rect.left)/rect.width*w;
+  const y=(e.clientY-rect.top)/rect.height*h;
+  magLastX=x;magLastY=y;
+  const rx=+$('res').value,ry=Math.round(rx*2/3);
+  const zoom=magZoom(rx);
+  drawMagnifier('postOverlay','post',x,y,rx,ry,zoom,'#e76b58');
+  drawMagnifier('preOverlay','pre',x,y,rx,ry,zoom,'#65c99a');
+}
+function magRefresh(){
+  if(!magEnabled||magLastX===null)return;
+  const rx=+$('res').value,ry=Math.round(rx*2/3);
+  const zoom=magZoom(rx);
+  drawMagnifier('postOverlay','post',magLastX,magLastY,rx,ry,zoom,'#e76b58');
+  drawMagnifier('preOverlay','pre',magLastX,magLastY,rx,ry,zoom,'#65c99a');
+}
+function magHide(){
+  magLastX=null;magLastY=null;
+  ['postOverlay','preOverlay'].forEach(id=>{
+    const ov=$(id);
+    const w=Number(ov.dataset.logicalWidth||ov.getAttribute('width'));
+    const h=Number(ov.dataset.logicalHeight||ov.getAttribute('height'));
+    const dpr=window.devicePixelRatio||1;
+    const c=ov.getContext('2d');
+    c.setTransform(dpr,0,0,dpr,0,0);
+    c.clearRect(0,0,w,h);
+  });
+}
+function magToggle(){
+  magEnabled=!magEnabled;
+  document.querySelectorAll('.canvas-wrap').forEach(w=>w.classList.toggle('mag-hide-cursor',magEnabled));
+  const btn=$('magBtn');
+  btn.classList.toggle('active',magEnabled);
+  btn.textContent=magEnabled?'🔍 关闭放大镜（M）':'🔍 开启放大镜（M）';
+  if(!magEnabled)magHide();
+}
+$('magBtn').addEventListener('click',magToggle);
+document.addEventListener('keydown',function(e){
+  const k=e.key.toLowerCase();
+  if(k==='m'){magToggle();return}
+  if(k==='b'){noFilter=false;document.getElementById('ftBox').checked=true;document.getElementById('boxOpts').style.display='';document.getElementById('crossInfo').style.display='none';render();return}
+  if(k==='c'){noFilter=false;document.getElementById('ftCross').checked=true;document.getElementById('boxOpts').style.display='none';document.getElementById('crossInfo').style.display='';render();return}
+  if(k==='3'){noFilter=false;document.getElementById('ftBox').checked=true;document.getElementById('boxOpts').style.display='';document.getElementById('crossInfo').style.display='none';document.getElementById('boxSize3').checked=true;render();return}
+  if(k==='5'){noFilter=false;document.getElementById('ftBox').checked=true;document.getElementById('boxOpts').style.display='';document.getElementById('crossInfo').style.display='none';document.getElementById('boxSize5').checked=true;render();return}
+  if(k==='0'){noFilter=true;render();return}
+  if(k==='x'){crossEnabled=!crossEnabled;noFilter=false;document.getElementById('ftCross').checked=true;document.getElementById('boxOpts').style.display='none';document.getElementById('crossInfo').style.display='';render();return}
+  if(k==='arrowleft'||k==='arrowright'){const s=$('res'),step=(s.max-s.min)/8;let v=+s.value+(k==='arrowright'?step:-step);s.value=Math.max(+s.min,Math.min(+s.max,v));render();return}
+});
+document.querySelectorAll('.canvas-wrap').forEach(w=>{
+  w.addEventListener('mousemove',e=>{if(magEnabled)magUpdate(e)});
+  w.addEventListener('mouseleave',magHide);
+});
+
+// ===== Section 03 演示 =====
+function drawKernelDemo(){
+  const el=document.getElementById('kernelDemo');if(!el)return;
+  const dpr=window.devicePixelRatio||1;const sz=300;
+  el.width=sz*dpr;el.height=sz*dpr;const c=el.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);
+  const k=document.querySelector('[name=kernelPick]:checked')?.value==='5'?5:3;
+  const N=7,cell=sz/N,pad=2;
+  const r=(k-1)/2,cx=3,cy=3;
+  for(let y=0;y<N;y++)for(let x=0;x<N;x++){
+    const dx=Math.abs(x-cx),dy=Math.abs(y-cy);
+    let fill='#f0f0f0';
+    if(dx===0&&dy===0)fill='#37697c';
+    else if(dx<=r&&dy<=r)fill='#aecfc7';
+    c.fillStyle=fill;
+    c.fillRect(x*cell+pad,y*cell+pad,cell-pad*2,cell-pad*2);
+    c.strokeStyle='#d9e2de';c.lineWidth=1;
+    c.strokeRect(x*cell+pad,y*cell+pad,cell-pad*2,cell-pad*2);
+  }
+}
+document.querySelectorAll('[name=kernelPick]').forEach(el=>el.addEventListener('change',drawKernelDemo));
+drawKernelDemo();
+
+function drawDemoSrc(){
+  const el=document.getElementById('demoSrc');if(!el)return;
+  const dpr=window.devicePixelRatio||1;const sz=200;
+  el.width=sz*dpr;el.height=sz*dpr;const c=el.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);
+  const N=16,cell=sz/N;
+  for(let y=0;y<N;y++)for(let x=0;x<N;x++){
+    const inside=((x+y)>=N-2);
+    c.fillStyle=inside?'#444':'#ddd';
+    c.fillRect(x*cell,y*cell,cell+0.5,cell+0.5);
+  }
+  // 高频方向箭头：短粗、红色、浅灰区域
+  const ax=16,ay=16,bx=90,by=90;
+  c.strokeStyle='#c0392b';c.lineWidth=5;
+  c.beginPath();c.moveTo(ax,ay);c.lineTo(bx,by);c.stroke();
+  const angle=Math.atan2(by-ay,bx-ax);
+  c.fillStyle='#c0392b';
+  c.beginPath();
+  c.moveTo(bx+8*Math.cos(angle),by+8*Math.sin(angle));
+  c.lineTo(bx-10*Math.cos(angle-0.45),by-10*Math.sin(angle-0.45));
+  c.lineTo(bx-10*Math.cos(angle+0.45),by-10*Math.sin(angle+0.45));
+  c.closePath();c.fill();
+  c.font='bold 12px sans-serif';c.fillStyle='#c0392b';
+  c.save();c.translate(ax-4,ay+30);c.rotate(Math.PI/4);
+  c.fillText('\u9ad8\u9891\u65b9\u5411',0,0);c.restore();
+}
+drawDemoSrc();
+
+function drawDemoDst(){
+  const el=document.getElementById('demoDst');if(!el)return;
+  const dpr=window.devicePixelRatio||1;const sz=200;
+  el.width=sz*dpr;el.height=sz*dpr;const c=el.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);
+  const k=document.querySelector('[name=kernelPick]:checked')?.value==='5'?5:3;
+  const N=16,cell=sz/N,r=(k-1)/2;
+  const data=[];
+  for(let y=0;y<N;y++){data[y]=[];for(let x=0;x<N;x++)data[y][x]=((x+y)>=N-2)?1:0}
+  for(let y=0;y<N;y++)for(let x=0;x<N;x++){
+    let sum=0,cnt=0;
+    for(let dy=-r;dy<=r;dy++)for(let dx=-r;dx<=r;dx++){
+      const yy=Math.max(0,Math.min(N-1,y+dy)),xx=Math.max(0,Math.min(N-1,x+dx));
+      sum+=data[yy][xx];cnt++;
+    }
+    const v=sum/cnt;
+    const g=Math.round(221-v*153);
+    c.fillStyle='rgb('+g+','+g+','+g+')';
+    c.fillRect(x*cell,y*cell,cell+0.5,cell+0.5);
+  }
+}
+drawDemoDst();
+document.querySelectorAll('[name=kernelPick]').forEach(el=>el.addEventListener('change',drawDemoDst));
+
+function drawKernelDemoCross(){
+  const el=document.getElementById('kernelDemoCross');if(!el)return;
+  const dpr=window.devicePixelRatio||1;const sz=220;
+  el.width=sz*dpr;el.height=sz*dpr;const c=el.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);
+  const on=document.getElementById('crossOn')?.checked;
+  const N=7,cell=sz/N,pad=2,r=3,cx=3,cy=3;
+  for(let y=0;y<N;y++)for(let x=0;x<N;x++){
+    const dx=Math.abs(x-cx),dy=Math.abs(y-cy);
+    let fill='#f0f0f0';
+    if(dx===0&&dy===0)fill='#37697c';
+    else if(on&&(dx===0||dy===0)&&(dx+dy)<=1)fill='#8fbc8f';
+    c.fillStyle=fill;
+    c.fillRect(x*cell+pad,y*cell+pad,cell-pad*2,cell-pad*2);
+    c.strokeStyle='#d9e2de';c.lineWidth=1;
+    c.strokeRect(x*cell+pad,y*cell+pad,cell-pad*2,cell-pad*2);
+  }
+}
+document.getElementById('crossOn')?.addEventListener('change',drawKernelDemoCross);
+drawKernelDemoCross();
+
+function drawDemoDstCross(){
+  const el=document.getElementById('demoDstCross');if(!el)return;
+  const dpr=window.devicePixelRatio||1;const sz=200;
+  el.width=sz*dpr;el.height=sz*dpr;const c=el.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);
+  const on=document.getElementById('crossOn')?.checked;
+  const N=16,cell=sz/N;
+  const data=[];
+  for(let y=0;y<N;y++){data[y]=[];for(let x=0;x<N;x++)data[y][x]=((x+y)>=N-2)?1:0}
+  for(let y=0;y<N;y++)for(let x=0;x<N;x++){
+    let v;
+    if(!on){v=data[y][x]}
+    else{
+      const yy1=Math.max(0,y-1),yy2=Math.min(N-1,y+1),xx1=Math.max(0,x-1),xx2=Math.min(N-1,x+1);
+      const avg=(data[yy1][x]+data[yy2][x]+data[y][xx1]+data[y][xx2])/4;
+      v=0.5*data[y][x]+0.5*avg;
+    }
+    const g=Math.round(221-v*153);
+    c.fillStyle='rgb('+g+','+g+','+g+')';
+    c.fillRect(x*cell,y*cell,cell+0.5,cell+0.5);
+  }
+}
+document.getElementById('crossOn')?.addEventListener('change',drawDemoDstCross);
+drawDemoDstCross();
+
+function drawSampleDiagram(){
+  var a=document.getElementById('sampleA'),b=document.getElementById('sampleB');if(!a||!b)return;
+  [[a,'A'],[b,'B']].forEach(function(pair){
+    var el=pair[0],mode=pair[1];
+    var dpr=window.devicePixelRatio||1,W=280,H=200;
+    el.width=W*dpr;el.height=H*dpr;var c=el.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);
+    c.fillStyle='#fff';c.fillRect(0,0,W,H);
+    c.fillStyle='#e8f2f0';c.fillRect(0,0,W,H);
+    c.fillStyle='#37697c';
+    c.beginPath();c.moveTo(W*0.15,0);c.lineTo(W,0);c.lineTo(W,H);c.lineTo(W*0.85,H);c.closePath();c.fill();
+    var N=6,cellW=W/N,cellH=H/N;
+    c.strokeStyle='rgba(150,160,170,0.35)';c.lineWidth=0.5;
+    for(var i=1;i<N;i++){c.beginPath();c.moveTo(i*cellW,0);c.lineTo(i*cellW,H);c.stroke();c.beginPath();c.moveTo(0,i*cellH);c.lineTo(W,i*cellH);c.stroke()}
+    var px=2*cellW,py=2*cellH;
+    var border=mode==='A'?'#c0392b':'#0d6b42';
+    c.strokeStyle=border;c.lineWidth=3;c.strokeRect(px+1,py+1,cellW-2,cellH-2);
+    if(mode==='A'){
+      c.fillStyle='#c0392b';c.beginPath();c.arc(px+cellW/2,py+cellH/2,5,0,Math.PI*2);c.fill();
+      c.fillStyle='#c0392b';c.font='bold 12px sans-serif';
+      c.fillText('\u4e2d\u5fc3\u70b9\u843d\u5728\u7ebf\u5de6\u4fa7',px+cellW+6,py+cellH/2-8);
+      c.fillText('\u2192 \u6574\u50cf\u7d20\u53d6\u4eae\u8272',px+cellW+6,py+cellH/2+8);
+    }else{
+      var kx=px-cellW,ky=py-cellH,kw=cellW*3,kh=cellH*3;
+      c.fillStyle='rgba(13,107,66,0.18)';c.fillRect(kx,ky,kw,kh);
+      c.strokeStyle='#0d6b42';c.lineWidth=2.5;c.setLineDash([5,3]);c.strokeRect(kx,ky,kw,kh);c.setLineDash([]);
+      var ss=8;
+      for(var sy=0;sy<ss;sy++)for(var sx=0;sx<ss;sx++){
+        var dx=kx+(sx+0.5)*kw/ss,dy=ky+(sy+0.5)*kh/ss;
+        c.fillStyle='#0d6b42';c.beginPath();c.arc(dx,dy,2,0,Math.PI*2);c.fill();
+      }
+      c.fillStyle='#0d6b42';c.font='bold 12px sans-serif';
+      c.fillText('\u91c7\u6837\u65b9\u5f0f\u4e0e A \u76f8\u540c\uff08\u50cf\u7d20\u4e2d\u5fc3\u8bfb\u503c\uff09',kx+4,ky+kh+16);
+      c.fillText('\u2192 \u8bfb\u6ee4\u6ce2\u540e\u7684\u7070\u5ea6\u503c',kx+4,ky+kh+32);
+    }
+    var rx=W-48,ry=H-58;
+    var resultColor=mode==='A'?'#d4e8e2':'#7daab0';
+    c.fillStyle=resultColor;c.fillRect(rx,ry,36,36);
+    c.strokeStyle='#333';c.lineWidth=1.5;c.strokeRect(rx,ry,36,36);
+    c.fillStyle='#333';c.font='bold 11px sans-serif';c.fillText('\u7ed3\u679c',rx+4,ry-5);
+    c.fillStyle='#333';c.font='bold 11px sans-serif';
+    c.fillText(mode==='A'?'A \u00b7 \u50cf\u7d20\u4e2d\u5fc3\u53d6 1 \u4e2a\u70b9':'B \u00b7 3\u00d73 \u76d2\u5185\u5b50\u91c7\u6837\u5747\u5300\u5e73\u5747',6,H-8);
+  });
+}
+drawSampleDiagram();
+</script>
+</body>
+</html>
